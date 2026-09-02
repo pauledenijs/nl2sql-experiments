@@ -63,3 +63,29 @@ Postgres can enforce the acceptable values of a column (CHECK (l2_status IN (0,1
 Column comments could carry these definitions, but the codebook is a table so the retrieval layer gets a consistent structure across tables: one row per column value.
 
 This is why "how many L2 participants" is a diagnostic tier-4 item: it doesn't test SQL, it tests whether retrieval put the right context in the prompt. 
+
+## 2026-09-01 - Write tables
+
+**Reading times stored as INTEGER.**
+
+Millisecond-level readings are inherently discrete whole-number values, so an integer type is the natural fit. The float tolerance present in the evaluation harness governs how computed aggregates such as `AVG(rt)` are compared at query time. It is a concern at the analysis layer, not a storage concern. Conflating the two would be a category error.
+
+**Surprisal and frequency stored as DOUBLE PRECISION.**
+
+Both are continuous measurements rather than discrete counts, so a floating-point type is appropriate. `NUMERIC` is designed for exact fixed-point decimal arithmetic (e.g., currency) and offers no advantage here. `REAL` would truncate precision earlier than necessary, and for no corresponding saving in space or speed.
+
+**ON DELETE RESTRICT applied to all foreign keys.**
+
+Research datasets are expensive to reconstruct and should never be silently reduced by an unrelated `DELETE` on a parent table. `ON DELETE CASCADE` is a common mechanism by which a routine cleanup on one table cascades into unintended mass loss across related tables. `SET NULL` was considered but is not viable on the `responses` table: `participant_id` forms half of the composite primary key, and primary key columns are not nullable.
+
+**Condition stored as unconstrained TEXT.**
+
+A `CHECK` constraint restricting the allowed values would be the conventional choice, but doing so would undermine the benchmark itself. Tier 4 deliberately includes approximately 2% rows with mislabeled condition values to verify whether the agent notices fragmentation. A `CHECK` constraint would reject those rows at insert time, making the tier untestable. The constraint is therefore intentionally omitted to preserve the diagnostic integrity of the benchmark.
+
+**rt declared NOT NULL.**
+
+The schema treats absence of a reading time as the absence of a row, not as a row containing a `NULL`. This keeps the representation of missing data unambiguous. The deliberately planted 12000 ms outlier is a genuine data value that tier 4's "longest reading time" query depends on being present and queryable. Allowing `NULL` in `rt` would introduce a second, competing representation of "no reading time" alongside sentinel values, complicating downstream analysis.
+
+**Foreign key column types must exactly match the referenced column type.**
+
+`responses.stimulus_id` was initially declared as `SMALLINT` while the referenced `stimuli.stimulus_id` primary key is `INTEGER`. The mismatch does not surface at small scale (under 10,000 rows) but will fail silently once identifiers exceed the 32,767 upper bound of `SMALLINT`. The constraint doesn't require identity, which is why the mismatch survives creation and fails later.
