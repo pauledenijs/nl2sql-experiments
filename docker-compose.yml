@@ -5,6 +5,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      NL2SQL_RO_PASSWORD: ${NL2SQL_RO_PASSWORD}
     ports:
       - "5433:5432"
     volumes:
