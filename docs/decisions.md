@@ -183,3 +183,23 @@ Verified on 5 September 2026 over TCP as `nl2sql_ro`: an incorrect password was 
 Rejected: leaving the password untested until Phase 2. That would have carried a known authentication gap forward for no benefit and made the first psycopg connection responsible for discovering bootstrap errors. 
 
 Accepted: publish PostgreSQL as `127.0.0.1:5433:5432` and verify the final connection path now. The loopback-only binding gives host-side psycopg and evaluation code access on port 5433 without exposing PostgreSQL on every host interface. Loopback binding and `scram` are independent controls: the binding limits who can reach PostgreSQL while `scram` makes reachability insufficient without a password.
+
+## 2026-09-07 - Phase 1 schema closure
+
+**rt removed, superseding the 1 September decision.**
+
+Because rt is exactly `offset_ms` - `onset_ms` when both timestamps use the same session clock. Storing all three creates two sources of truth and permits rt to disagree with the timestamps. Queries calculate it when needed. The 1 September entry remains in the log as the record of the earlier decision.
+
+**Singleton dataset versioning, not per-row versioning.**
+
+Because only one generated dataset needs to be loaded at a time. Per-row versioning would add `dataset_version_id` to fact-table keys and require a version predicate in all golden-set questions; one omitted predicate could silently mix versions. The dataset_versions manifest keeps the seed, generator version, parameters, timestamp, aggregates, and validation history without putting a version foreign key on every fact row.
+
+**03_codebook.sql is the source of truth; docs/codebook.md is generated from it.**
+
+Because the SQL codebook is what the agent queries and what can be validated against the live schema. Maintaining an independently editable Markdown copy would allow meanings to drift. If the files disagree, 03_codebook.sql wins and docs/codebook.md is regenerated.
+
+**stimuli.condition stays stored even though its canonical value is derivable from surprisal.**
+
+Because `condition` is a semantic classification produced by generator policy, not a lossless arithmetic identity. It freezes the surprisal constrast used by tier-3 questions and preserves the deliberately noncanonical labels emitted for 2 percent of rows. Recomputing `condition` in every query would duplicate the threshold rule, allow the golden questions to define the contrast differently, and erase the label-normalization problem those rows are intended to test.
+
+This is the asymmetry with rt: rt has one exact formula and should never disagres with its inputs. `condition` represents a versioned analytical decision and its stored surface label is deliberately allowed to differ from the canonical label. `surprisal` remains the numeric source used to validate the classification; `condition` remains the generated categorical value used for contrasts and normalization tests.

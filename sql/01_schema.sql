@@ -9,7 +9,11 @@ CREATE TABLE participants (
 	participant_id TEXT PRIMARY KEY,
 	age INTEGER,
 	l2_status SMALLINT NOT NULL,
-	session_order INTEGER NOT NULL
+	list_number INTEGER NOT NULL,
+	recruitment_site TEXT,
+	device TEXT NOT NULL,
+	recruitment_wave TEXT NOT NULL,
+	proficiency_score INTEGER
 );
 
 CREATE TABLE stimuli (
@@ -26,13 +30,16 @@ CREATE TABLE stimuli (
 	CONSTRAINT stimuli_story_id_fk
 		FOREIGN KEY (story_id)
 		REFERENCES stories(story_id)
-		ON DELETE RESTRICT
+		ON DELETE RESTRICT,
+
+	CHECK (sentence_num >= 1),
+	CHECK (word_position >= 1),
+	UNIQUE (story_id, sentence_num, word_position)
 );
 
 CREATE TABLE responses (
 	participant_id TEXT,
 	stimulus_id INTEGER,
-	rt INTEGER NOT NULL,
 	onset_ms INTEGER NOT NULL,
 	offset_ms INTEGER NOT NULL,
 	
@@ -90,5 +97,20 @@ CREATE TABLE codebook(
 	meaning TEXT NOT NULL,
 	
 	CONSTRAINT codebook_pk
-		PRIMARY KEY (table_name, column_name, value)
+		PRIMARY KEY (table_name, column_name, value),
+
+	CONSTRAINT codebook_value_not_empty
+		CHECK (value <> '')
+);
+
+CREATE TABLE dataset_versions(
+	dataset_version TEXT PRIMARY KEY,
+	generated_at TIMESTAMPTZ NOT NULL,
+	generator_version TEXT NOT NULL,
+	seed INT NOT NULL,
+	generation_parameters JSONB NOT NULL,
+	expected_aggregates JSONB NOT NULL,
+	observed_aggregates JSONB,
+	row_counts JSONB,
+	validation_status TEXT NOT NULL
 );
