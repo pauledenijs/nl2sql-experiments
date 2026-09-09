@@ -1,6 +1,6 @@
 .venv/
 .env
-data/
+data/generated
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
