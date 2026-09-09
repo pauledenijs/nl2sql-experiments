@@ -203,3 +203,99 @@ Because the SQL codebook is what the agent queries and what can be validated aga
 Because `condition` is a semantic classification produced by generator policy, not a lossless arithmetic identity. It freezes the surprisal constrast used by tier-3 questions and preserves the deliberately noncanonical labels emitted for 2 percent of rows. Recomputing `condition` in every query would duplicate the threshold rule, allow the golden questions to define the contrast differently, and erase the label-normalization problem those rows are intended to test.
 
 This is the asymmetry with rt: rt has one exact formula and should never disagres with its inputs. `condition` represents a versioned analytical decision and its stored surface label is deliberately allowed to differ from the canonical label. `surprisal` remains the numeric source used to validate the classification; `condition` remains the generated categorical value used for contrasts and normalization tests.
+
+## 2026-09-09 - Stimulus ingestion and loading
+
+### Decided
+
+**Natural Stories text will be committed to the repository and not fetched at build time.**
+
+Because downloading it during the build would create an external build dependency and could undermine reproducibility if the upstream corpus changed.
+
+**The repository will use separate licenses for code and data.**
+
+Because separate licensing keeps the applicable terms for corpus-derived data distinct from independently written code; a single repo-wide license would either over-restrict the code or misrepresent the data.
+
+**Natural Stories `item` maps to story and `zone` to word.**
+
+Because preserving the corpus coordinates provides a stable source mapping.
+
+**`word_position` will be numbered within each sentence.**
+
+Because its meaning must remain stable and unambiguous across stories and sentences.
+
+**`word` will preserve corpus punctuation with normalization performed only for lexical lookup.**
+
+Because the stored stimulus preserves the punctuated form required as input to surprisal computation.
+
+**Word length will be derived rather than stored.**
+
+Because it is a deterministic property of the stored word and should not become a second value that can drift out of agreement.
+
+**`condition` will be stored on `responses`, not `stimuli`, superseding the 2026-09-01 decision.**
+
+Because condition is generated contamination rather than a Natural Stories annotation and therefore belongs with the generated observations.
+
+**Zipf frequency will come from SUBTLEX and remain nullable.**
+
+Because proper nouns and rare forms may have no SUBTLEX match, and absence is not equivalent to zero frequency. 
+
+**Surprisal will be stored in nats.**
+
+Because the unit must be explicit and consistent across generation, storage, and analysis.
+
+**Tables will load in a topological ordering of the foreign-key graph.**
+
+Because every referenced parent row must exist before its dependent rows are loaded.
+
+**The generator, not PostgreSQL, will assign keys shared across generated TSVs.**
+
+Because files such as `stimuli.tsv` and `responses.tsv` must agree on `stimulus_id` before loading, and `stimuli.stimulus_id` is `NOT NULL` with no default. The same inputs and generation seed must produce the same keys.
+
+**Generated tab-separated files will use `\N` for NULL and load with `HEADER MATCH`.**
+
+Because the writer and PostgreSQL must share an explicit missing-value marker, while header validation prevents column-name and ordering drift.
+
+**The dataset manifest will begin with `validation_status = 'pending'` and change to `valid` only after all validation and loading operations succeed.** 
+
+Because an incomplete or partially loaded dataset version must never be exposed as valid.
+
+**The repository's `./data/source` directory will be mounted read-only inside the database container at `/data`.**
+
+Because the loader needs a stable in-container path but must not modify committed source data.
+
+### Open
+
+**Surprisal provenance remains open and must be decided before the stub is replaced with the full Natural Stories file.**
+
+Because the storage unit is fixed as nats, but the source model, model version, tokenizer, and subword-to-word aggregation method have not yet been selected.
+
+**The `responses` schema must gain a `condition` column before the generator writes `responses.tsv`.**
+
+Because `condition` must be materialized, but the current table has no column to store it.
+
+**The unit at which noncanonical condition labels are planted remains open and must be decided before response generation.**
+
+Because planting per response allows two participants to receive different labels for the same stimulus, while planting once per stimulus and copying the label to every response produces consistent stimulus-level dirt.
+
+**Whether punctuation counts toward analytical word length remains open and must be decided before word-length questions are finalized.**
+
+Because the current default is `length(word)`, which counts the characters in the stored punctuated form, while punctuation-stripped character counting has not been implemented.
+
+### Verified today
+
+**`\N` and `HEADER MATCH` load successfully.**
+
+Observed output: `COPY 50`.
+
+**An empty string in a numeric field is rejected rather than silently converted to zero.**
+
+Observed output: `ERROR: invalid input syntax for type double precision`.
+
+**A nullable Zipf frequency survives the TSV-to-PostgreSQL round trip as SQL NULL.**
+
+Observed output: `SELECT count(*) FROM stimuli WHERE zipf_frequency IS NULL;` returned `1`.
+
+**A quoted stimulus survives CSV parsing correctly.**
+
+Observed output: the TSV field `"""If"` loaded as `"If`, and PostgreSQL returned a character length of `3`.
