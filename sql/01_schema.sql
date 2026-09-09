@@ -22,10 +22,8 @@ CREATE TABLE stimuli (
 	sentence_num INTEGER NOT NULL,
 	word_position INTEGER NOT NULL,
 	word TEXT NOT NULL,
-	frequency DOUBLE PRECISION NOT NULL,
-	length INTEGER NOT NULL,
-	surprisal DOUBLE PRECISION NOT NULL,
-	condition TEXT,
+	zipf_frequency DOUBLE PRECISION,
+	surprisal_nats DOUBLE PRECISION,
 	
 	CONSTRAINT stimuli_story_id_fk
 		FOREIGN KEY (story_id)
