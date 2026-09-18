@@ -299,3 +299,90 @@ Observed output: `SELECT count(*) FROM stimuli WHERE zipf_frequency IS NULL;` re
 **A quoted stimulus survives CSV parsing correctly.**
 
 Observed output: the TSV field `"""If"` loaded as `"If`, and PostgreSQL returned a character length of `3`.
+
+## 2026-09-10 - Manifest loading
+
+**Insert a pending manifest before loading**
+
+Decided to commit the dataset manifest as `pending` before data loading begins, then update it to `valid` only in the transaction that commits the complete dataset because the manifest is intended to distinguish a load in progress from a completed load, and partial data must never be labeled valid.
+
+## 2026-09-14 - Manifest loading
+
+**The loader will insert only the final valid manifest.**
+
+Changed the 2026-09-10 decision: `load.py` will not create a `pending` manifest; it inserts with  `validation_status=valid` only after every table has copied and passed all row-count assertions.
+
+This changed because `pending` status has no consumer and could not be observed by other sessions: the manifest insert, table copies, and status update all occur in a single transaction. 
+
+A manifest row should therefore exist only for a complete dataset. By keeping the insert inside the transaction, either the data and manifest commit together or neither does.
+
+The `validation_status` column is retained despite `valid` being the only permitted value today, as it explicitly states the current contract and provides a clear migration point should a later phase need to persist invalid datasets.
+
+## 2026-09-15 - Project structure
+
+**The Phase 1 loader implementation remains flat in `src/load.py`.**
+
+Because the immediate goal is to prove the loader against known fixtures rather than to design the final package structure. Packaging (e.g., `__init__.py`, `pyproject.toml`, and `pip install -e .`) is deferred until the loader contract is stable. Shared connection code will move to `db.py` only when more than one implemented module requires it.
+
+## 2026-09-16 - Testing strategy
+
+**Hand-written TSV fixtures will be used as stand-ins for generator output.**
+
+Because they provide known outcomes now: the valid stub must load, while each malformed fixture must fail without leaving rows or a manifest. The generator will later produce files against this already-tested loader contract.
+
+## 2026-09-17 - Database versioning
+
+**Only one active dataset version will be kept per database.**
+
+Because mixing old and new rows could create a partial or mixed-version dataset, while automatic truncation could destroy data without an explicit operator decision. The emptiness check covers all ordinary tables in public schema (excluding `codebook`, which is static reference data).
+
+This decision makes the absence of version foreign keys in `stories` and `stimuli` deliberate: `dataset_versions.dataset_version` is the primary key of the manifest and the label for the one active dataset. It is not a foreign key carried by every generated row. Evaluation results must record the dataset-version label used for each run to support cross-version comparison.
+
+Consequences:
+
+* A second load into a populated database fails before `COPY`.
+* Replacing a dataset requires an explicit reset.
+* Ordinary and golden SQL do not need a dataset-version predicate.
+* Raw cross-version SQL analysis is not supported.
+* Supporting coexisting raw versions later will require a new decision and a migration to versioned keys/foreign keys.
+
+During development, `docker compose down -v` will be used as a deliberate reset before a successful load. The loader itself never truncates or replaces data implicitly.
+
+## 2026-09-18 - Loader contract and fixtures
+
+**The loader contract will be independent and atomic.**
+
+Because the TSV header must be checked against an independent expectation rather than a list derived from the header itself. The loader follows a strict sequence:
+1. Require declared input tables.
+2. Preflight check of TSV headers and row counts.
+3. Open one transaction.
+4. Refuse if non-static public tables contain rows.
+5. Topologically sort supplied tables via PostgreSQL foreign keys.
+6. Stream TSVs through `COPY`.
+7. Assert copied row counts.
+8. Insert the final manifest as valid.
+9. Commit only on success.
+
+The current `REQUIRED_TABLES` and `COLUMNS` contract contains only `stories` and `stimuli`. Contracts for later generator tables will be added only when those files exist and can be tested.
+
+**Each malformed fixture will contain exactly one defect.**
+
+Because multiple defects in one file allow the first error to mask the second. This isolates specific failure modes: `stimuli_empty_frequency.tsv` isolates numeric type conversion (`InvalidTextRepresentation`), and `stimuli_unterminated_quote.tsv` isolates CSV structure (`BadCopyFileFormat`).
+
+## Verified Behaviors (2026-09-18)
+
+**Observed Results:**
+
+| Test | Outcome | `stories` | `stimuli` | dataset_versions |
+| :--- | :--- | :--- | :--- | :--- |
+| Valid stub load | Committed; valid manifest inserted | 10 | 50 | 1 |
+| Second load | Refused before copying (`RuntimeError`) | 10 | 50 | 1 |
+| Header mismatch | Rejected by Python before connecting (`ValueError`) | 0 | 0 | 0 |
+| Empty `zipf_frequency` | PostgreSQL rejected (`InvalidTextRepresentation`); transaction rolled back | 0 | 0 | 0 |
+| Unterminated quote | PostgreSQL raised `BadCopyFileFormat`; rolled back | 0 | 0 | 0 |
+
+**Key Observations:**
+
+* **Transactional Atomicity:** After a malformed stimulus load, `stories` count is 0. Since stories are copied first in the transaction, this proves that a later failure in the same transaction successfully rolls back previous copies.
+* **Manifest Integrity:** No partial data or false manifests survive a failed load.
+* **Preflight Validation:** Header mismatches are caught before a database connection is ever opened.
