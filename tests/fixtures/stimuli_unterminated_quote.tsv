@@ -1,3 +1,2 @@
 stimulus_id	story_id	sentence_num	word_position	word	zipf_frequency	surprisal_nats
-1001	1	1	1	"“Unterminated quoted token
-"	4.82	7.193
+1001	1	1	1	"Unterminated	4.82	7.193
