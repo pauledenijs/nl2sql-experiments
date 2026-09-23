@@ -369,7 +369,7 @@ The current `REQUIRED_TABLES` and `COLUMNS` contract contains only `stories` and
 
 Because multiple defects in one file allow the first error to mask the second. This isolates specific failure modes: `stimuli_empty_frequency.tsv` isolates numeric type conversion (`InvalidTextRepresentation`), and `stimuli_unterminated_quote.tsv` isolates CSV structure (`BadCopyFileFormat`).
 
-## Verified Behaviors (2026-09-18)
+### Verified Behaviors (2026-09-18)
 
 **Observed Results:**
 
@@ -386,3 +386,9 @@ Because multiple defects in one file allow the first error to mask the second. T
 * **Transactional Atomicity:** After a malformed stimulus load, `stories` count is 0. Since stories are copied first in the transaction, this proves that a later failure in the same transaction successfully rolls back previous copies.
 * **Manifest Integrity:** No partial data or false manifests survive a failed load.
 * **Preflight Validation:** Header mismatches are caught before a database connection is ever opened.
+
+## 2026-09-23 - Repeatable local commands
+
+**Add a root-level Makefile for common Compose and stub-loading commands.**
+
+Because loading .env and reconstructing the long loader invocation each session is easy to get wrong. named Make targets make the workflow repeatable. Keep the scratch database reset as an explicit target because it removes stored data.
