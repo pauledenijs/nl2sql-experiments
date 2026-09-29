@@ -392,3 +392,25 @@ Because multiple defects in one file allow the first error to mask the second. T
 **Add a root-level Makefile for common Compose and stub-loading commands.**
 
 Because loading .env and reconstructing the long loader invocation each session is easy to get wrong. named Make targets make the workflow repeatable. Keep the scratch database reset as an explicit target because it removes stored data.
+
+## 2026-09-28 - Repeatable loader validation
+
+**Dedicated test database.**
+
+Run loader tests against `nl2sql_test` and verify its name before clearing tables. Because the loader requires an empty database, tests need a clean starting point without removing experimental data.
+
+**Schema-driven cleanup.**
+
+Discover the public tables before each reset and truncate them except for `codebook`. Because tables may be added to the schema and codebook is static reference data, cleanup must adapt without deleting reference values. `01_schema.sql` creates `codebook` but does not populate it, so the fixture's before and after comparison is provisional until codebook rows are added.
+
+**Make-managed test workflow.**
+
+Keep `make test-db` separate from `make test`. Because `test-db` drops and recreates the test database, routine test runs should load `.env` and run pytest without rebuilding it. `make reset` destroys the PostgreSQL volume, including `nl2sql_test`, so run `make test-db` again after a reset. The valid-stub test checks for 10 stories, 50 stimuli, and one dataset version.
+
+**Grant coverage.** `make test-db` applies `sql/01_schema.sql` but does not run `02_grants.sh`. Because those grants are not applied to the test database, these loader tests do not verify read-only permissions.
+
+### Verified Behaviors (2026-09-28)
+
+**Observed Results:**
+
+The valid-stub load is now automated in `tests/test_load.py`. The remaining manual checks are pending migration.
