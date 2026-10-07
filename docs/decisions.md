@@ -414,3 +414,9 @@ Keep `make test-db` separate from `make test`. Because `test-db` drops and recre
 **Observed Results:**
 
 The valid-stub load is now automated in `tests/test_load.py`. The remaining manual checks are pending migration.
+
+## 2026-10-06 - Automate loader failure checks
+
+**Move the remaining verified loader behaviors into pytest.**
+
+Because the September 18 checks were manual observations, the loader test suite now reruns the remaining four against `nl2sql_test`: a second load is refused without changing the 10/50/1 counts; a mismatched header raises `ValueError` before the loader connects; and empty frequency and unterminated quote fixtures raise their expected PostgreSQL errors. Both PostgreSQL failures leave zero stories, zero stimuli, and zero dataset versions, verifying transaction rollback.
