@@ -420,3 +420,32 @@ The valid-stub load is now automated in `tests/test_load.py`. The remaining manu
 **Move the remaining verified loader behaviors into pytest.**
 
 Because the September 18 checks were manual observations, the loader test suite now reruns the remaining four against `nl2sql_test`: a second load is refused without changing the 10/50/1 counts; a mismatched header raises `ValueError` before the loader connects; and empty frequency and unterminated quote fixtures raise their expected PostgreSQL errors. Both PostgreSQL failures leave zero stories, zero stimuli, and zero dataset versions, verifying transaction rollback.
+
+## 2026-10-20 - Verify Natural Stories source positions and wordforms
+
+**Use the downloaded corpus counts.** 
+
+`all_stories.tok` contains 10,256 word rows. The paper reports 10,245. Stories 6 and 10 account for the differences in the per-story counts. Because the cause remains unknown, retain the downloaded rows rather than removing eleven to match the paper.
+
+| Story | Downloaded rows | Published words | Difference |
+| --- | ---: | ---: | ---: |
+| 1 | 1,073 | 1,073 | 0 |
+| 2 | 990 | 990 | 0 |
+| 3 | 1,040 | 1,040 | 0 |
+| 4 | 1,085 | 1,085 | 0 |
+| 5 | 1,013 | 1,013 | 0 |
+| 6 | 1,099 | 1,089 | +10 |
+| 7 | 999 | 999 | 0 |
+| 8 | 980 | 980 | 0 |
+| 9 | 1,038 | 1,038 | 0 |
+| 10 | 939 | 938 | +1 |
+| **Total** | **10,256** | **10,245** | **+11** |
+
+**Join the files by story and posiotion.**
+
+`all_stories.tok` and the `.shole` rows of `words.tsv` each contain 10,256 positions, with zero positions unique to either file. Because the position sets match, story and position form the alignment key.
+
+**Use `all_stories.tok` for `stimuli.word'.**
+
+The files disagree on exactly one wordform: at story 2, position 749, `all_stories.tok` has `peaked` and `words.tsv` has `peeked`. The repository notes that wordform differences reflect typos in the SPR experiment as run, and its history shows this `.tok` row changing from `peeked` to `peaked`. Use the `.tok` form for the stimulus and the shared position for annotations from `words.tsv`. Because spelling differs at this position do not require wordform equality when joining the files.
+
