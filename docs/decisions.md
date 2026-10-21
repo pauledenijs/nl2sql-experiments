@@ -449,3 +449,29 @@ Because the September 18 checks were manual observations, the loader test suite 
 
 The files disagree on exactly one wordform: at story 2, position 749, `all_stories.tok` has `peaked` and `words.tsv` has `peeked`. The repository notes that wordform differences reflect typos in the SPR experiment as run, and its history shows this `.tok` row changing from `peeked` to `peaked`. Use the `.tok` form for the stimulus and the shared position for annotations from `words.tsv`. Because spelling differs at this position do not require wordform equality when joining the files.
 
+## 2026-10-21 - Verify surprisal alignment and scoring
+
+**Use one constructed text for alignment and scoring.**
+
+Join the `all_stories.tok` wordforms with single spaces, separately for each story. Because `.tok` records word order but not interword whitespace, this makes the model input explicit and ensures alignment and scoring use identical text.
+
+**Use the Llama 3.2 3B tokenizer's verified word groups.**
+
+With special tokens disable, its subtokens reconstruct all 10,256 corpus words exactly: zero word failures and zero story failures. Because each group also respects the word boundaries, the group sizes can identify which subtoken surprisals belong to each word.
+
+**Score each token from the preceding position.** 
+
+The scoring tokenizer places BOS at position 0. A five-ID example produced four surprisal values; the value for the first text token agreed with an independent lookiup from the BOS logits. Because the causal logits predict the next token, pair `logits[:-1]` with `input_ids[1:]`. 
+
+**Transfer alignment groups to the scoring sequence.**
+
+For story 1, scoring IDs after BOS exactly matched the IDs used for alignment. Its 1,073 words formed groups containing 1,291 subtokens, and scoring produced 1,291 surprisal values. Because the IDs match and the lengths agree, these groups refer to the values produced by the scoring path.
+
+**Record the verified runtime.**
+
+The working model run used `meta-llama/Llama-3.2-3B`, `torch 2.14.1+cu130`, an RTX 5090, and fp32 model weights. Because model output depends on the runtime and checkpoint, retain these details with the eventual generated dataset.
+
+**Record gated model access.**
+
+Reproducing the Llama 3.2 3B run requires a Hugging Face account with access to [meta-llama/Llama-3.2-3B](https://huggingface.co/meta-llama/Llama-3.2-3B), acceptance of its access terms, and local authentication with a user token (`hf auth login`). Because a new machine can otherwise receive a 403 before scoring starts, document this requirement alongside the runtime versions. Do not commit the token.
+
