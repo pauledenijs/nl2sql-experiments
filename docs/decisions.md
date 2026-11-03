@@ -475,3 +475,28 @@ The working model run used `meta-llama/Llama-3.2-3B`, `torch 2.14.1+cu130`, an R
 
 Reproducing the Llama 3.2 3B run requires a Hugging Face account with access to [meta-llama/Llama-3.2-3B](https://huggingface.co/meta-llama/Llama-3.2-3B), acceptance of its access terms, and local authentication with a user token (`hf auth login`). Because a new machine can otherwise receive a 403 before scoring starts, document this requirement alongside the runtime versions. Do not commit the token.
 
+## 2026-11-03 - Load the first real surprisal slice
+
+**Build one story end to end expanding the generator.**
+
+The story 1 builder read `all_stories.tok`, joins its words with single spaces, tokenizes, scores, sums subtoken surprisals by word, and writes a loader-compatible TSV. Because this checks the interfaces between generation and loading, keep the first implementation scoped to one story.
+
+**Use explicit placeholders for deferred fields.** 
+
+Emit `sentence_num=1` for every row and '\N' for `zip_frequency`. Because sentence segmentation and the SUBTLEX join are separate tasks, these fields must remain recognizable as incomplete rather than contain invented measurements.
+
+**Preserve the verified scoring path.**
+
+Require BOS at position 0 and require scoring IDs after BOS to equal alignment IDs. Compute next-token surprisal with the verified shift-and-gather operation, then sum using the word group sizes. Because alignment and scoring must refer to the same subtokens, reject mismatched IDs, counts, or non-finite scores.
+
+**Verify the generated file through the existing loader.**
+
+The TSV contained 1,073 data rows plus its header and loaded successfully into `nl2sql_test` alongside the stories file. Because generation is only useful if its output satisfies the database contract, use a real load as the acceptance check for this slice.
+
+**Record the observed 5.0-nat split without generalizing it.**
+
+PostgreSQL reported 1,073 stimuli: 192 above 5.0 nats (17.9%) and 881 at or below 5.0 nats (82.1%). All 1,073 frequency values were NULL as intended. Because this result covers only story 1 and includes its BOS-conditioned first word, it does not yet validate the threshold across the corpus.
+
+**Restructure before scoring all ten stories.**
+
+The current scoring function loads the model internally. Move model loading outside the per-story loop, check each story's token length including BOS against the context limit, and decide and record 'overflow_policy'. Because ten-story scoring has not run, neither context fit nor overflow behavior is verified yet.
