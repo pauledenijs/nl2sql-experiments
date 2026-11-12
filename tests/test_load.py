@@ -54,8 +54,10 @@ def clean_db():
         if database != "nl2sql_test":
             raise RuntimeError(f"Refusing to clear database {database!r}")
 
-        # Provisional until the test database has codebook rows to preserve.
+        # Preserve seeded static codebook rows across loader tests.
         codebook_before = codebook_rows(conn)
+        if not codebook_before:
+            raise RuntimeError("Test codebook is empty; run make test-db")
         reset_loaded_tables(conn)
     
     yield dsn

@@ -26,6 +26,7 @@ test-db:
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d postgres -c 'DROP DATABASE IF EXISTS nl2sql_test'; \
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d postgres -c 'CREATE DATABASE nl2sql_test'; \
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d nl2sql_test < sql/01_schema.sql; \
+	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d nl2sql_test < sql/03_codebook.sql; \
 	docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d nl2sql_test -c '\dt'
 
 test:

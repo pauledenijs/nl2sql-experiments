@@ -500,3 +500,66 @@ PostgreSQL reported 1,073 stimuli: 192 above 5.0 nats (17.9%) and 881 at or belo
 **Restructure before scoring all ten stories.**
 
 The current scoring function loads the model internally. Move model loading outside the per-story loop, check each story's token length including BOS against the context limit, and decide and record 'overflow_policy'. Because ten-story scoring has not run, neither context fit nor overflow behavior is verified yet.
+
+## 2026-11-10 - Score and load all ten stories
+
+**Load the model once and score stories separately.**
+
+Generalize the reader to validate each story against its verified word count and sequential zones, and pass the loaded model into the scoring function. Because every story uses the same model, load its weights once while preserving separate whole-story context.
+
+**Reject context overflow explicitly.**
+
+Set `overflow_policy=error` and compare each input length, including BOS, against the model's configured context limit. Because silent truncation would change the scored text, reject oversized input rather than truncate or split them. All ten stories fit the 131,072-token limit; the longest was story 6 at 1,350 tokens including BOS. The overflow policy was not triggered.
+
+**Verify the generated corpus through the existing loader.** 
+
+Write continuous stimulus IDs from 1 through 10,256, retaining each word's story ID and zone. The generated TSV loaded successfully into `nl2sql_test`, with 10,256 scored rows and zero missing surprisals. Frequency lookup remains deferred, so all frequencies are NULL.
+
+**Treat the current sentence representation as provisional.**
+
+All sentence numbers remain 1, and `word_position` currently contains the story-global zone. The uniqueness constraint passes because zones are unique within each story; this does not validate the intended sentence-local representation. Because the 09-09 decision specifies positions within sentences, segmentation must assign sentence numbers and sentence-local positions together.
+
+**Record the distribution before interpreting a diagnostic cutoff.**
+
+The corpus minimum rounded to 0.000 nats, median was 2.044, mean was 2.779, and maximum was 22.774. At 5.0 nats, 1,794 words were above the cutoff and 8,462 were at or below it. Thus 5.0 nats sits at the empirical 82.51 percentile. This was a diagnostic cutoff, not verification of the codebook's canonical condition boundary.
+
+| Story | Words | Min | Median | Mean | Max | % at or below 5 nats |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 1073 | 0.002 | 1.784 | 2.659 | 15.697 | 82.11 |
+| 2 | 990 | 0.009 | 2.377 | 3.127 | 15.680 | 78.59 |
+| 3 | 1040 | 0.001 | 2.247 | 2.951 | 22.774 | 80.87 |
+| 4 | 1085 | 0.002 | 2.053 | 2.849 | 14.381 | 81.38 |
+| 5 | 1013 | 0.003 | 1.787 | 2.561 | 21.027 | 85.19 |
+| 6 | 1099 | 0.001 | 2.292 | 2.978 | 17.123 | 80.71 |
+| 7 | 999 | 0.002 | 1.975 | 2.645 | 18.014 | 84.58 |
+| 8 | 980 | 0.003 | 1.956 | 2.667 | 15.182 | 83.06 |
+| 9 | 1038 | 0.000 | 2.155 | 2.920 | 20.694 | 80.92 |
+| 10 | 939 | 0.001 | 1.818 | 2.383 | 16.980 | 88.39 |
+
+These scores include each story's BOS-conditioned first word. Displayed minimum are rounded, not evidence of exact zero values.
+
+## 2026-11-11 - Correct codebook units and seed loader-test reference data
+
+**Correct the codebook column name and unit.**
+
+The codebook described `stimuli.surprisal` in bits using -log2, while the schema and builder use `stimuli.surprisal_nats` with natural logarithms. Update the column name, unit, and formula. Because the computed values already follow the nats storage decision, correct the metadata without converting the scores.
+
+**Preserve the existing canonical conditions.** 
+
+The codebook defines low surprisal as below 5.0 bits and high surprisal as at or above 5.0 bits. Express the boundary as `5 * ln(2)` nats, preserving both the labels and the strict/inclusive comparisons. Because correcting metadata must not silently redefine conditions, do not replace this with a 5.0-nat boundary. The 5-bit boundary stands as the inherited condition definition, not as a newly validated experimental choice.
+
+**Record the consquence of the unit mismatch.**
+
+Diagnostic queries found 3,142 words strictly above 5 bits converted to nats, compared with 1,794 strictly above 5 nats: a difference of 1,348 words. Because the stale metadata could have produced future golden answers that disagreed with the stored scores, retain this discrepancy in the decision log. 
+
+**Verify the inherited condition boundary inclusively.**
+
+At `5 * ln(2) nats, 7,114 words are below the boundary and 3,142 are at or above it; none fall exactly on it. The inherited split is therefore 69.36% low and 30.64% high, rather than the 82.51%/17.49% split produced by a 5.0-nat cutoff. Because this preserves the existing codebook definition, retain it for now; reconsidering the boundary once golden questions exist remains open.
+
+**Seed codebook rows in the test database.** 
+
+Apply `sql/03_codebook.sql` after `sql/01_schema.sql` in `make test-db`. Require a nonempty codebook snapshot in the loader fixture and preserve it during cleanup. Because comparing two empty snapshots proves nothing about preserving reference data, this replaces the provisional setup recorded in September. The database must be rebuilt to receive the seed.
+
+**Restore sentence-level position semantics during segmentation.**
+
+The generator currently writes story-global zones as `word_position`, contrary to the 09-09 decision. Keep that standing decision: assign positions within each sentence when segmentation is implemented. Because the original zone is the join key to `words.tsv`, retain it in an explicit mapping or separate column rather than discard it. The representation for preserving that source key remains to be chosen.
